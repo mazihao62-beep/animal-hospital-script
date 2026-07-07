@@ -1,57 +1,42 @@
---[[
-    医院透视治疗脚本(作者b站:英吉利超入_)
-    功能：透视区分人类/伪人（红绿标签）+ 治疗人类
-          调试：扫描范围、显示标签、自动治疗
-          横版UI，死亡不丢失，复活自动恢复
-    作者：英吉利超入
---]]
-
+-- 动物透视脚本（属性分类版）
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- 治疗远程事件（根据实际游戏修改！）
-local treatmentEvent = nil
-local function getTreatmentEvent()
-    -- 示例：假设治疗事件在这里，如果不存在则忽略
-    local event = ReplicatedStorage:FindFirstChild("TreatmentEvent")
-    if event and event:IsA("RemoteEvent") then
-        treatmentEvent = event
-        return true
-    end
-    return false
-end
-
--- 尝试获取治疗事件
-getTreatmentEvent()
-
--- NPC 分类规则（需要根据游戏修改！）
--- 返回 "human" 或 "fake" 或 "unknown"
+-- 根据属性分类
 local function classifyNPC(model)
-    -- 示例：根据名称判断
+    local attrs = model:GetAttributes()
+    -- 伪动物：Skinwalker = true
+    if attrs["Skinwalker"] == true then
+        return "fake"
+    end
+    -- 真动物：IsPatient = true 且没有 Skinwalker
+    if attrs["IsPatient"] == true then
+        return "real"
+    end
+    -- 特殊处理已知名字
     local name = model.Name:lower()
-    if name:find("human") then return "human" end
-    if name:find("fake") or name:find("伪人") then return "fake" end
-
-    -- 示例：根据属性或Tag
-    -- if model:GetAttribute("IsFake") then return "fake" end
-
-    return "unknown" -- 无法识别的不显示
+    if name == "nurse" then
+        return "real"
+    end
+    if name == "jumpscaredummy" then
+        return "fake"
+    end
+    return "unknown"
 end
 
--- 获取所有 NPC（非玩家角色，且有 Humanoid）
+-- 获取所有 NPC
 local function getAllNPCs()
     local npcs = {}
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("Model") and obj ~= player.Character then
             local humanoid = obj:FindFirstChild("Humanoid")
             local hrp = obj:FindFirstChild("HumanoidRootPart")
-            if humanoid and hrp and humanoid.Health > 0 then
+            if humanoid and hrp then
                 table.insert(npcs, obj)
             end
         end
@@ -63,36 +48,30 @@ local currentLanguage = "Chinese"
 
 local LANG = {
     Chinese = {
-        title = "医院透视治疗脚本(作者b站:英吉利超入_)",
+        title = "动物透视脚本(作者b站:英吉利超入_)",
         esp = "透视显示",
         showLabels = "显示名字标签",
         range = "扫描范围",
-        autoHeal = "自动治疗人类",
-        healRange = "治疗范围",
-        notice = "红色：伪人  绿色：人类  蓝色：未知",
+        notice = "红色：伪动物  绿色：真动物  蓝色：未知",
         floatText = "b站:英吉利超入_",
         langSelected = "你已选择中文语言",
         espOn = "透视已开启",
-        healOn = "治疗已开启",
     },
     English = {
-        title = "Hospital ESP & Heal Script (Author: bilibili Yingjili Chaoru_)",
+        title = "Animal ESP Script (Author: bilibili Yingjili Chaoru_)",
         esp = "ESP",
         showLabels = "Show Name Tags",
         range = "Scan Range",
-        autoHeal = "Auto Heal Humans",
-        healRange = "Heal Range",
-        notice = "Red: Fake   Green: Human   Blue: Unknown",
+        notice = "Red: Fake   Green: Real   Blue: Unknown",
         floatText = "bilibili: Yingjili Chaoru_",
         langSelected = "You have selected English",
         espOn = "ESP enabled",
-        healOn = "Heal enabled",
     }
 }
 
 local function showNotification(title, content, duration)
     duration = duration or 2
-    print("[医院脚本] " .. title .. (content ~= "" and " - " .. content or ""))
+    print("[动物透视] " .. title .. (content ~= "" and " - " .. content or ""))
     StarterGui:SetCore("SendNotification", {
         Title = title,
         Text = content,
@@ -100,6 +79,7 @@ local function showNotification(title, content, duration)
     })
 end
 
+-- 语言选择界面
 local function createLanguageSelection()
     local langGui = Instance.new("ScreenGui")
     langGui.Name = "LanguageSelector"
@@ -195,8 +175,8 @@ function createMainGui()
     end)
 
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 500, 0, 360)
-    mainFrame.Position = UDim2.new(0.5, -250, 0.4, -180)
+    mainFrame.Size = UDim2.new(0, 500, 0, 280)
+    mainFrame.Position = UDim2.new(0.5, -250, 0.4, -140)
     mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     mainFrame.BackgroundTransparency = 0.05
     mainFrame.BorderSizePixel = 0
@@ -285,7 +265,7 @@ function createMainGui()
     contentFrame.Position = UDim2.new(0, 12, 0, 38)
     contentFrame.BackgroundTransparency = 1
     contentFrame.ScrollBarThickness = 4
-    contentFrame.CanvasSize = UDim2.new(0, 0, 0, 500)
+    contentFrame.CanvasSize = UDim2.new(0, 0, 0, 400)
     contentFrame.Parent = mainFrame
 
     local listLayout = Instance.new("UIListLayout")
@@ -351,12 +331,9 @@ function createMainGui()
     local showLabelsBtn = createToggleButton(lang.showLabels, contentFrame, 2)
     local rangeCtrl = createSlider(lang.range, 20, 200, 80, contentFrame, 3)
 
-    local healBtn = createToggleButton(lang.autoHeal, contentFrame, 4)
-    local healRangeCtrl = createSlider(lang.healRange, 10, 50, 20, contentFrame, 5)
-
     local noticeLabel = Instance.new("TextLabel")
     noticeLabel.Size = UDim2.new(1, 0, 0, 24)
-    noticeLabel.LayoutOrder = 6
+    noticeLabel.LayoutOrder = 4
     noticeLabel.BackgroundTransparency = 1
     noticeLabel.Font = Enum.Font.SourceSans
     noticeLabel.TextSize = 11
@@ -364,7 +341,8 @@ function createMainGui()
     noticeLabel.TextXAlignment = Enum.TextXAlignment.Center
     noticeLabel.Text = lang.notice
     noticeLabel.Parent = contentFrame
--- 悬浮窗
+
+    -- 悬浮窗
     local floatFrame = Instance.new("Frame")
     floatFrame.Size = UDim2.new(0, 260, 0, 40)
     floatFrame.Position = UDim2.new(0.5, -130, 0, 10)
@@ -438,32 +416,16 @@ function createMainGui()
     -- 透视逻辑
     local espEnabled = false
     local showLabels = false
-    local healEnabled = false
-    local espTag = "HospitalESP"
-    local highlightContainer = Instance.new("Folder")
-    highlightContainer.Name = "ESP_Highlights"
-    highlightContainer.Parent = Workspace -- 存放 Highlight 对象
+    local espTag = "AnimalESP"
 
-    -- 移除所有高亮
-    local function clearHighlights()
-        for _, child in ipairs(highlightContainer:GetChildren()) do
-            child:Destroy()
+    local function removeAllLabels()
+        for _, npc in ipairs(getAllNPCs()) do
+            local billboard = npc:FindFirstChild("ESP_Label")
+            if billboard then billboard:Destroy() end
+            npc:SetAttribute(espTag, nil)
         end
     end
 
-    -- 为模型添加高亮
-    local function addHighlight(model, color)
-        local highlight = Instance.new("Highlight")
-        highlight.Name = model.Name
-        highlight.FillColor = color
-        highlight.FillTransparency = 0.5
-        highlight.OutlineColor = color
-        highlight.OutlineTransparency = 0
-        highlight.Adornee = model
-        highlight.Parent = highlightContainer
-    end
-
-    -- 添加名字标签
     local function addLabel(model, text, color)
         if model:GetAttribute(espTag) then return end
         local billboard = Instance.new("BillboardGui")
@@ -471,8 +433,9 @@ function createMainGui()
         billboard.Size = UDim2.new(0, 200, 0, 30)
         billboard.StudsOffset = Vector3.new(0, 3, 0)
         billboard.AlwaysOnTop = true
-        billboard.Adornee = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
-        if not billboard.Adornee then return end
+        local adornee = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+        if not adornee then return end
+        billboard.Adornee = adornee
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(1, 0, 1, 0)
         label.BackgroundTransparency = 1
@@ -486,21 +449,8 @@ function createMainGui()
         model:SetAttribute(espTag, true)
     end
 
-    -- 移除标签
-    local function removeLabel(model)
-        local billboard = model:FindFirstChild("ESP_Label")
-        if billboard then billboard:Destroy() end
-        model:SetAttribute(espTag, nil)
-    end
-
-    -- 刷新透视
     local function updateESP()
-        clearHighlights()
-        -- 移除所有标签
-        for _, npc in ipairs(getAllNPCs()) do
-            removeLabel(npc)
-        end
-
+        removeAllLabels()
         if not espEnabled then return end
         local scanRange = rangeCtrl.GetValue()
         local char = player.Character
@@ -509,19 +459,17 @@ function createMainGui()
             local hrp = npc:FindFirstChild("HumanoidRootPart")
             if hrp and (not myPos or (hrp.Position - myPos).Magnitude <= scanRange) then
                 local category = classifyNPC(npc)
-                local color
-                local labelText
-                if category == "human" then
-                    color = Color3.new(0, 1, 0) -- 绿
-                    labelText = "人类"
+                local color, labelText
+                if category == "real" then
+                    color = Color3.new(0, 1, 0)
+                    labelText = "真动物"
                 elseif category == "fake" then
-                    color = Color3.new(1, 0, 0) -- 红
-                    labelText = "伪人"
+                    color = Color3.new(1, 0, 0)
+                    labelText = "伪动物"
                 else
-                    color = Color3.new(0, 0.5, 1) -- 蓝
+                    color = Color3.new(0, 0.5, 1)
                     labelText = "未知"
                 end
-                addHighlight(npc, color)
                 if showLabels then
                     addLabel(npc, labelText, color)
                 end
@@ -529,41 +477,14 @@ function createMainGui()
         end
     end
 
-    -- 治疗逻辑
-    local function healHumans()
-        if not treatmentEvent then return end
-        local char = player.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-        local myPos = char.HumanoidRootPart.Position
-        local healRange = healRangeCtrl.GetValue()
-        for _, npc in ipairs(getAllNPCs()) do
-            if classifyNPC(npc) == "human" then
-                local hrp = npc:FindFirstChild("HumanoidRootPart")
-                if hrp and (hrp.Position - myPos).Magnitude <= healRange then
-                    pcall(function()
-                        treatmentEvent:FireServer(npc) -- 假设参数是目标模型，根据游戏调整
-                        print("[医院脚本] 治疗: " .. npc.Name)
-                    end)
-                end
-            end
-        end
-    end
-
-    -- 循环
     local espThread = nil
     local function espLoop()
-        while espEnabled or healEnabled do
-            if espEnabled then
-                updateESP()
-            end
-            if healEnabled then
-                healHumans()
-            end
+        while espEnabled or showLabels do
+            updateESP()
             task.wait(0.5)
         end
     end
 
-    -- 按钮事件
     espBtn.MouseButton1Click:Connect(function()
         espEnabled = not espEnabled
         if espEnabled then
@@ -576,12 +497,8 @@ function createMainGui()
         else
             espBtn.Text = lang.esp
             espBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
-            clearHighlights()
-            -- 移除所有标签
-            for _, npc in ipairs(getAllNPCs()) do
-                removeLabel(npc)
-            end
-            if not healEnabled then
+            removeAllLabels()
+            if not showLabels then
                 if espThread then task.cancel(espThread) end
                 espThread = nil
             end
@@ -593,38 +510,19 @@ function createMainGui()
         if showLabels then
             showLabelsBtn.Text = lang.showLabels .. " (ON)"
             showLabelsBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        else
-            showLabelsBtn.Text = lang.showLabels
-            showLabelsBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
-            for _, npc in ipairs(getAllNPCs()) do
-                removeLabel(npc)
-            end
-        end
-        updateESP()
-    end)
-
-    healBtn.MouseButton1Click:Connect(function()
-        healEnabled = not healEnabled
-        if healEnabled then
-            if not treatmentEvent then
-                showNotification("错误", "未找到治疗事件，请配置脚本", 3)
-                healEnabled = false
-                return
-            end
-            healBtn.Text = lang.autoHeal .. " (ON)"
-            healBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
             if not espThread then
                 espThread = task.spawn(espLoop)
             end
-            showNotification(lang.healOn, "", 2)
         else
-            healBtn.Text = lang.autoHeal
-            healBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
+            showLabelsBtn.Text = lang.showLabels
+            showLabelsBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
+            removeAllLabels()
             if not espEnabled then
                 if espThread then task.cancel(espThread) end
                 espThread = nil
             end
         end
+        updateESP()
     end)
 
     local function addToggleHover(btn, getActive, activeColor)
@@ -639,7 +537,6 @@ function createMainGui()
     end
     addToggleHover(espBtn, function() return espEnabled end, Color3.fromRGB(200,50,50))
     addToggleHover(showLabelsBtn, function() return showLabels end, Color3.fromRGB(200,50,50))
-    addToggleHover(healBtn, function() return healEnabled end, Color3.fromRGB(200,50,50))
 
     RunService.Heartbeat:Connect(function()
         local hue = (tick() * 0.5) % 1

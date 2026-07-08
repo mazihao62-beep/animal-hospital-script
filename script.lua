@@ -1,4 +1,5 @@
--- 动物透视脚本（属性分类版）
+-- 动物透视增强脚本（透视 + 移速 + 秒互动）
+-- 横版UI，死亡不丢失，复活自动恢复
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local StarterGui = game:GetService("StarterGui")
@@ -10,22 +11,11 @@ local playerGui = player:WaitForChild("PlayerGui")
 -- 根据属性分类
 local function classifyNPC(model)
     local attrs = model:GetAttributes()
-    -- 伪动物：Skinwalker = true
-    if attrs["Skinwalker"] == true then
-        return "fake"
-    end
-    -- 真动物：IsPatient = true 且没有 Skinwalker
-    if attrs["IsPatient"] == true then
-        return "real"
-    end
-    -- 特殊处理已知名字
+    if attrs["Skinwalker"] == true then return "fake" end
+    if attrs["IsPatient"] == true then return "real" end
     local name = model.Name:lower()
-    if name == "nurse" then
-        return "real"
-    end
-    if name == "jumpscaredummy" then
-        return "fake"
-    end
+    if name == "nurse" then return "real" end
+    if name == "jumpscaredummy" then return "fake" end
     return "unknown"
 end
 
@@ -48,35 +38,37 @@ local currentLanguage = "Chinese"
 
 local LANG = {
     Chinese = {
-        title = "动物透视脚本(作者b站:英吉利超入_)",
+        title = "动物透视增强脚本(作者b站:英吉利超入_)",
         esp = "透视显示",
         showLabels = "显示名字标签",
         range = "扫描范围",
+        speed = "移动速度",
+        instantInteract = "秒互动",
         notice = "红色：伪动物  绿色：真动物  蓝色：未知",
         floatText = "b站:英吉利超入_",
         langSelected = "你已选择中文语言",
         espOn = "透视已开启",
+        instantOn = "秒互动已开启",
     },
     English = {
-        title = "Animal ESP Script (Author: bilibili Yingjili Chaoru_)",
+        title = "Animal ESP Enhanced (Author: bilibili Yingjili Chaoru_)",
         esp = "ESP",
         showLabels = "Show Name Tags",
         range = "Scan Range",
+        speed = "Walk Speed",
+        instantInteract = "Instant Interact",
         notice = "Red: Fake   Green: Real   Blue: Unknown",
         floatText = "bilibili: Yingjili Chaoru_",
         langSelected = "You have selected English",
         espOn = "ESP enabled",
+        instantOn = "Instant Interact enabled",
     }
 }
 
 local function showNotification(title, content, duration)
     duration = duration or 2
     print("[动物透视] " .. title .. (content ~= "" and " - " .. content or ""))
-    StarterGui:SetCore("SendNotification", {
-        Title = title,
-        Text = content,
-        Duration = duration,
-    })
+    StarterGui:SetCore("SendNotification", { Title = title, Text = content, Duration = duration })
 end
 
 -- 语言选择界面
@@ -84,10 +76,7 @@ local function createLanguageSelection()
     local langGui = Instance.new("ScreenGui")
     langGui.Name = "LanguageSelector"
     langGui.Parent = playerGui
-
-    langGui.AncestryChanged:Connect(function()
-        if not langGui.Parent then langGui.Parent = playerGui end
-    end)
+    langGui.AncestryChanged:Connect(function() if not langGui.Parent then langGui.Parent = playerGui end end)
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 240, 0, 120)
@@ -145,38 +134,21 @@ local function createLanguageSelection()
     addHover(chineseBtn)
     addHover(englishBtn)
 
-    chineseBtn.MouseButton1Click:Connect(function()
-        currentLanguage = "Chinese"
-        langGui:Destroy()
-        createMainGui()
-    end)
-    englishBtn.MouseButton1Click:Connect(function()
-        currentLanguage = "English"
-        langGui:Destroy()
-        createMainGui()
-    end)
+    chineseBtn.MouseButton1Click:Connect(function() currentLanguage = "Chinese"; langGui:Destroy(); createMainGui() end)
+    englishBtn.MouseButton1Click:Connect(function() currentLanguage = "English"; langGui:Destroy(); createMainGui() end)
 end
 
 function createMainGui()
     local lang = LANG[currentLanguage]
-
     local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "HospitalUI"
+    screenGui.Name = "AnimalESPUI"
     screenGui.Parent = playerGui
-
-    screenGui.AncestryChanged:Connect(function()
-        if not screenGui.Parent then screenGui.Parent = playerGui end
-    end)
-    task.spawn(function()
-        while true do
-            if not screenGui.Parent then screenGui.Parent = playerGui end
-            task.wait(1)
-        end
-    end)
+    screenGui.AncestryChanged:Connect(function() if not screenGui.Parent then screenGui.Parent = playerGui end end)
+    task.spawn(function() while true do if not screenGui.Parent then screenGui.Parent = playerGui end; task.wait(1) end end)
 
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 500, 0, 280)
-    mainFrame.Position = UDim2.new(0.5, -250, 0.4, -140)
+    mainFrame.Size = UDim2.new(0, 500, 0, 360)
+    mainFrame.Position = UDim2.new(0.5, -250, 0.4, -180)
     mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     mainFrame.BackgroundTransparency = 0.05
     mainFrame.BorderSizePixel = 0
@@ -197,13 +169,8 @@ function createMainGui()
     local lastPosition = mainFrame.Position
     local lastSize = mainFrame.Size
     local isMaximized = false
-
-    mainFrame:GetPropertyChangedSignal("Position"):Connect(function()
-        if not isMaximized then lastPosition = mainFrame.Position end
-    end)
-    mainFrame:GetPropertyChangedSignal("Size"):Connect(function()
-        if not isMaximized then lastSize = mainFrame.Size end
-    end)
+    mainFrame:GetPropertyChangedSignal("Position"):Connect(function() if not isMaximized then lastPosition = mainFrame.Position end end)
+    mainFrame:GetPropertyChangedSignal("Size"):Connect(function() if not isMaximized then lastSize = mainFrame.Size end end)
 
     -- 标题栏
     local titleBar = Instance.new("Frame")
@@ -265,7 +232,7 @@ function createMainGui()
     contentFrame.Position = UDim2.new(0, 12, 0, 38)
     contentFrame.BackgroundTransparency = 1
     contentFrame.ScrollBarThickness = 4
-    contentFrame.CanvasSize = UDim2.new(0, 0, 0, 400)
+    contentFrame.CanvasSize = UDim2.new(0, 0, 0, 500)
     contentFrame.Parent = mainFrame
 
     local listLayout = Instance.new("UIListLayout")
@@ -273,6 +240,7 @@ function createMainGui()
     listLayout.Padding = UDim.new(0, 6)
     listLayout.Parent = contentFrame
 
+    -- 控件创建函数
     local function createToggleButton(text, parent, order)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, -10, 0, 38)
@@ -315,25 +283,22 @@ function createMainGui()
         input.Parent = frame
 
         return {
-            SetValue = function(val)
-                input.Text = tostring(val)
-                label.Text = title .. ": " .. tostring(val)
-            end,
-            GetValue = function()
-                return tonumber(input.Text) or default
-            end,
+            SetValue = function(val) input.Text = tostring(val); label.Text = title .. ": " .. tostring(val) end,
+            GetValue = function() return tonumber(input.Text) or default end,
             Frame = frame
         }
     end
 
-    -- 控件
+    -- 创建控件
     local espBtn = createToggleButton(lang.esp, contentFrame, 1)
     local showLabelsBtn = createToggleButton(lang.showLabels, contentFrame, 2)
     local rangeCtrl = createSlider(lang.range, 20, 200, 80, contentFrame, 3)
+    local speedCtrl = createSlider(lang.speed, 16, 100, 16, contentFrame, 4)
+    local instantBtn = createToggleButton(lang.instantInteract, contentFrame, 5)
 
     local noticeLabel = Instance.new("TextLabel")
     noticeLabel.Size = UDim2.new(1, 0, 0, 24)
-    noticeLabel.LayoutOrder = 4
+    noticeLabel.LayoutOrder = 6
     noticeLabel.BackgroundTransparency = 1
     noticeLabel.Font = Enum.Font.SourceSans
     noticeLabel.TextSize = 11
@@ -341,7 +306,6 @@ function createMainGui()
     noticeLabel.TextXAlignment = Enum.TextXAlignment.Center
     noticeLabel.Text = lang.notice
     noticeLabel.Parent = contentFrame
-
     -- 悬浮窗
     local floatFrame = Instance.new("Frame")
     floatFrame.Size = UDim2.new(0, 260, 0, 40)
@@ -391,23 +355,15 @@ function createMainGui()
         end
     end)
 
-    minimizeBtn.MouseButton1Click:Connect(function()
-        mainFrame.Visible = false
-        floatFrame.Visible = true
-    end)
+    minimizeBtn.MouseButton1Click:Connect(function() mainFrame.Visible = false; floatFrame.Visible = true end)
     maximizeBtn.MouseButton1Click:Connect(function()
         if not isMaximized then
-            lastPosition = mainFrame.Position
-            lastSize = mainFrame.Size
-            mainFrame.Size = UDim2.new(1, 0, 1, 0)
-            mainFrame.Position = UDim2.new(0, 0, 0, 0)
-            maximizeBtn.Text = "❐"
-            isMaximized = true
+            lastPosition = mainFrame.Position; lastSize = mainFrame.Size
+            mainFrame.Size = UDim2.new(1, 0, 1, 0); mainFrame.Position = UDim2.new(0, 0, 0, 0)
+            maximizeBtn.Text = "❐"; isMaximized = true
         else
-            mainFrame.Size = lastSize
-            mainFrame.Position = lastPosition
-            maximizeBtn.Text = "□"
-            isMaximized = false
+            mainFrame.Size = lastSize; mainFrame.Position = lastPosition
+            maximizeBtn.Text = "□"; isMaximized = false
         end
     end)
 
@@ -461,82 +417,120 @@ function createMainGui()
                 local category = classifyNPC(npc)
                 local color, labelText
                 if category == "real" then
-                    color = Color3.new(0, 1, 0)
-                    labelText = "真动物"
+                    color = Color3.new(0, 1, 0); labelText = "真动物"
                 elseif category == "fake" then
-                    color = Color3.new(1, 0, 0)
-                    labelText = "伪动物"
+                    color = Color3.new(1, 0, 0); labelText = "伪动物"
                 else
-                    color = Color3.new(0, 0.5, 1)
-                    labelText = "未知"
+                    color = Color3.new(0, 0.5, 1); labelText = "未知"
                 end
-                if showLabels then
-                    addLabel(npc, labelText, color)
-                end
+                if showLabels then addLabel(npc, labelText, color) end
             end
         end
     end
 
     local espThread = nil
-    local function espLoop()
-        while espEnabled or showLabels do
-            updateESP()
-            task.wait(0.5)
-        end
-    end
+    local function espLoop() while espEnabled or showLabels do updateESP(); task.wait(0.5) end end
 
     espBtn.MouseButton1Click:Connect(function()
         espEnabled = not espEnabled
         if espEnabled then
-            espBtn.Text = lang.esp .. " (ON)"
-            espBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-            if not espThread then
-                espThread = task.spawn(espLoop)
-            end
+            espBtn.Text = lang.esp .. " (ON)"; espBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            if not espThread then espThread = task.spawn(espLoop) end
             showNotification(lang.espOn, "", 2)
         else
-            espBtn.Text = lang.esp
-            espBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
+            espBtn.Text = lang.esp; espBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
             removeAllLabels()
-            if not showLabels then
-                if espThread then task.cancel(espThread) end
-                espThread = nil
-            end
+            if not showLabels then if espThread then task.cancel(espThread) end; espThread = nil end
         end
     end)
 
     showLabelsBtn.MouseButton1Click:Connect(function()
         showLabels = not showLabels
         if showLabels then
-            showLabelsBtn.Text = lang.showLabels .. " (ON)"
-            showLabelsBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-            if not espThread then
-                espThread = task.spawn(espLoop)
-            end
+            showLabelsBtn.Text = lang.showLabels .. " (ON)"; showLabelsBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            if not espThread then espThread = task.spawn(espLoop) end
         else
-            showLabelsBtn.Text = lang.showLabels
-            showLabelsBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
+            showLabelsBtn.Text = lang.showLabels; showLabelsBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
             removeAllLabels()
-            if not espEnabled then
-                if espThread then task.cancel(espThread) end
-                espThread = nil
-            end
+            if not espEnabled then if espThread then task.cancel(espThread) end; espThread = nil end
         end
         updateESP()
     end)
 
+    -- 移速功能
+    local function applyWalkSpeed(speed)
+        local char = player.Character
+        if char then
+            local humanoid = char:FindFirstChild("Humanoid")
+            if humanoid then humanoid.WalkSpeed = speed end
+        end
+    end
+
+    local speedInput = speedCtrl.Frame:FindFirstChild("TextBox")
+    if speedInput then
+        speedInput:GetPropertyChangedSignal("Text"):Connect(function()
+            local speed = tonumber(speedInput.Text)
+            if speed then
+                speed = math.clamp(speed, 16, 100)
+                applyWalkSpeed(speed)
+            end
+        end)
+    end
+
+    player.CharacterAdded:Connect(function(char) applyWalkSpeed(speedCtrl.GetValue()) end)
+    if player.Character then applyWalkSpeed(speedCtrl.GetValue()) end
+
+    -- 秒互动功能
+    local instantEnabled = false
+    local originalDurations = {}
+    local descendantAddedConn = nil
+
+    local function modifyPrompt(prompt, enable)
+        if enable then
+            if not originalDurations[prompt] then originalDurations[prompt] = prompt.HoldDuration end
+            prompt.HoldDuration = 0
+        else
+            local original = originalDurations[prompt]
+            if original and prompt.Parent then prompt.HoldDuration = original end
+        end
+    end
+
+    local function processAllPrompts(enable)
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") then modifyPrompt(obj, enable) end
+        end
+    end
+
+    local function onDescendantAdded(descendant)
+        if descendant:IsA("ProximityPrompt") then modifyPrompt(descendant, true) end
+    end
+
+    instantBtn.MouseButton1Click:Connect(function()
+        instantEnabled = not instantEnabled
+        if instantEnabled then
+            instantBtn.Text = lang.instantInteract .. " (ON)"; instantBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            processAllPrompts(true)
+            descendantAddedConn = Workspace.DescendantAdded:Connect(onDescendantAdded)
+            showNotification(lang.instantOn, "", 2)
+        else
+            instantBtn.Text = lang.instantInteract; instantBtn.BackgroundColor3 = Color3.fromRGB(60, 160, 60)
+            if descendantAddedConn then descendantAddedConn:Disconnect(); descendantAddedConn = nil end
+            for prompt, original in pairs(originalDurations) do
+                if prompt.Parent then prompt.HoldDuration = original end
+            end
+            originalDurations = {}
+        end
+    end)
+
+    -- 悬停效果
     local function addToggleHover(btn, getActive, activeColor)
         local orig = btn.BackgroundColor3
-        btn.MouseEnter:Connect(function()
-            if not getActive() then btn.BackgroundColor3 = orig:Lerp(Color3.new(1,1,1), 0.15) end
-        end)
-        btn.MouseLeave:Connect(function()
-            if getActive() and activeColor then btn.BackgroundColor3 = activeColor
-            else btn.BackgroundColor3 = orig end
-        end)
+        btn.MouseEnter:Connect(function() if not getActive() then btn.BackgroundColor3 = orig:Lerp(Color3.new(1,1,1), 0.15) end end)
+        btn.MouseLeave:Connect(function() if getActive() and activeColor then btn.BackgroundColor3 = activeColor else btn.BackgroundColor3 = orig end end)
     end
     addToggleHover(espBtn, function() return espEnabled end, Color3.fromRGB(200,50,50))
     addToggleHover(showLabelsBtn, function() return showLabels end, Color3.fromRGB(200,50,50))
+    addToggleHover(instantBtn, function() return instantEnabled end, Color3.fromRGB(200,50,50))
 
     RunService.Heartbeat:Connect(function()
         local hue = (tick() * 0.5) % 1

@@ -38,7 +38,7 @@ local currentLanguage = "Chinese"
 
 local LANG = {
     Chinese = {
-        title = "动物透视增强脚本(作者b站:英吉利超入_)",
+        title = "动物医院脚本(作者b站:英吉利超入_)",
         esp = "透视显示",
         showLabels = "显示名字标签",
         range = "扫描范围",
